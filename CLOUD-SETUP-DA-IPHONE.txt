@@ -1,0 +1,11 @@
+SOMMELIER — ATTIVAZIONE CLOUD
+1) Apri il progetto Supabase già associato all'app.
+2) Vai in SQL Editor > New query, incolla tutto supabase/schema.sql e premi Run.
+3) In Authentication > Providers verifica che Email sia attivo. Se è attiva la conferma email, apri il link ricevuto prima di accedere.
+4) In Settings > API verifica che config.js contenga Project URL e Publishable key corretti. Non inserire mai service_role.
+5) Carica i file del pacchetto nella root del repository GitHub, mantenendo cartella supabase.
+6) Attiva GitHub Pages in Settings > Pages e attendi la pubblicazione HTTPS.
+7) Apri il sito su Safari iPhone, crea account e prova una bottiglia e una foto.
+8) Al primo login, se trova dati locali ma il cloud è vuoto, l'app chiede se vuoi importarli.
+9) Per il riconoscimento AI: da computer con Supabase CLI, imposta OPENAI_API_KEY nei secrets e fai deploy della funzione supabase/functions/recognize-label.
+10) Fai regolarmente Backup dalla schermata Cantina.
