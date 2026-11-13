@@ -1,26 +1,83 @@
+
+
 /* SOMMELIER — applicazione cantina personale */
+
 const KEY='sommelier_cellar_v3';let wines=load(),selected=null,supabase=null,currentUser=null,cloudBusy=false;
+
 const $=s=>document.querySelector(s),eur=n=>new Intl.NumberFormat('it-IT',{style:'currency',currency:'EUR'}).format(Number(n)||0),today=()=>new Date().toISOString().slice(0,10);
+
 function load(){try{return JSON.parse(localStorage.getItem(KEY)||localStorage.getItem('sommelier_cellar_v1')||'[]')}catch{return []}}
+
 function persist(){localStorage.setItem(KEY,JSON.stringify(wines));render()}
+
 function esc(s=''){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
 function total(){return wines.reduce((n,w)=>n+Number(w.quantity||1),0)}
-function render(){ $('#count').innerHTML=`${total()} <small>/ 150</small>`;$('#labels').textContent=wines.length;$('#value').textContent=eur(wines.reduce((n,w)=>n+(Number(w.price)||0)*Number(w.quantity||1),0));$('#empty').classList.toggle('hidden',wines.length>0);let a=[...wines],s=$('#sort').value;if(s==='name')a.sort((x,y)=>x.name.localeCompare(y.name));if(s==='vintage')a.sort((x,y)=>String(y.vintage||'').localeCompare(String(x.vintage||'')));if(s==='new')a.reverse();$('#wineList').innerHTML=a.map(w=>`<article class="wine-card" data-id="${esc(w.id)}">${w.photo?`<img class="wine-thumb" src="${w.photo}" alt="Etichetta">`:`<div class="wine-thumb wine-placeholder">♜</div>`}<div><h3>${esc(w.name)}</h3><p>${esc([w.producer,w.appellation,w.region].filter(Boolean).join(' · '))}</p><p>${esc(w.vintage||'Annata n.d.')} · ${Number(w.quantity)||1} bott.</p></div><div class="wine-meta">${w.price?eur(w.price):'—'}<br><small>ACQUISTO</small></div></article>`).join('');let ts=wines.flatMap(w=>(w.tastings||[]).map(t=>({w,t}))).sort((x,y)=>(y.t.date||'').localeCompare(x.t.date||''));$('#journalEmpty').classList.toggle('hidden',ts.length>0);$('#journalList').innerHTML=ts.map(({w,t})=>`<article class="wine-card"><div class="wine-thumb wine-placeholder">✧</div><div><h3>${esc(w.name)}</h3><p>${esc(t.date)} · ${esc(t.notes||'Degustazione')}</p></div><div class="wine-meta">${t.score??'—'}<br><small>/ 100</small></div></article>`).join('');$('#accountBtn').textContent=currentUser?'Cloud: connesso':'Cloud: accedi';$('#cloudNotice').textContent=currentUser?`Account cloud: ${currentUser.email}`:'Cloud non collegato.\nAccedi per sincronizzare i dati tra dispositivi.'
+
+function render(){
+
+ $('#count').innerHTML=`${total()} <small>/ 150</small>`;
+
+ $('#labels').textContent=wines.length;
+
+ $('#value').textContent=eur(wines.reduce((n,w)=>n+(Number(w.price)||0)*Number(w.quantity||1),0));
+
+ $('#empty').classList.toggle('hidden',wines.length>0);
+
+ let a=[...wines],s=$('#sort').value;
+
+ if(s==='name')a.sort((x,y)=>x.name.localeCompare(y.name));
+
+ if(s==='vintage')a.sort((x,y)=>String(y.vintage||'').localeCompare(String(x.vintage||'')));
+
+ if(s==='new')a.reverse();
+
+ $('#wineList').innerHTML=a.map(w=>`<article class="wine-card" data-id="${esc(w.id)}">${w.photo?`<img class="wine-thumb" src="${w.photo}" alt="Etichetta">`:`<div class="wine-thumb wine-placeholder">♜</div>`}<div><h3>${esc(w.name)}</h3><p>${esc([w.producer,w.appellation,w.region].filter(Boolean).join(' · '))}</p><p>${esc(w.vintage||'Annata n.d.')} · ${Number(w.quantity)||1} bott.</p></div><div class="wine-meta">${w.price?eur(w.price):'—'}<br><small>ACQUISTO</small></div></article>`).join('');
+
+ let ts=wines.flatMap(w=>(w.tastings||[]).map(t=>({w,t}))).sort((x,y)=>(y.t.date||'').localeCompare(x.t.date||''));
+
+ $('#journalEmpty').classList.toggle('hidden',ts.length>0);
+
+ $('#journalList').innerHTML=ts.map(({w,t})=>`<article class="wine-card"><div class="wine-thumb wine-placeholder">✧</div><div><h3>${esc(w.name)}</h3><p>${esc(t.date)} · ${esc(t.notes||'Degustazione')}</p></div><div class="wine-meta">${t.score??'—'}<br><small>/ 100</small></div></article>`).join('');
+
+ $('#accountBtn').textContent=currentUser?'Cloud: connesso':'Cloud: accedi';
+
+ $('#cloudNotice').textContent=currentUser?`Account cloud: ${currentUser.email}`:'Cloud non collegato.\nAccedi per sincronizzare i dati tra dispositivi.';
+
+}
+
 function status(s){let n=$('#authMessage');if(n)n.textContent=s;let c=$('#cloudStatus');if(c)c.textContent=s}
+
 function initCloud(){if(!window.supabase||!window.SOMMELIER_SUPABASE_URL||!window.SOMMELIER_SUPABASE_KEY){status('Configura URL e publishable key Supabase in config.js');return}supabase=window.supabase.createClient(window.SOMMELIER_SUPABASE_URL,window.SOMMELIER_SUPABASE_KEY);supabase.auth.getSession().then(({data,error})=>{if(error)status(error.message);if(data.session){currentUser=data.session.user;syncFromCloud()}else render()});supabase.auth.onAuthStateChange((_e,session)=>{currentUser=session?.user||null;if(currentUser)syncFromCloud();else render()})}
+
 function rowFromDb(r){return{id:r.id,cloudId:true,name:r.wine_name,producer:r.producer||'',vintage:r.vintage||'',appellation:r.appellation||'',region:r.region||'',grapes:r.grapes||'',quantity:r.quantity||1,price:Number(r.purchase_price)||0,purchaseDate:r.purchase_date||'',location:r.storage_location||'',notes:r.notes||'',photo:'',photoPath:r.label_image_path||'',marketValue:Number(r.market_value)||0,marketSource:r.market_source||'',marketDate:r.market_date||'',drinkFrom:r.drink_from||'',drinkUntil:r.drink_until||'',serviceTemp:r.service_temp||'',decanting:r.decanting||'',tastings:[]}}
+
 async function syncFromCloud(){if(!currentUser||cloudBusy)return;cloudBusy=true;status('Sincronizzazione in corso…');try{let {data:rows,error}=await supabase.from('wines').select('*').order('created_at',{ascending:false});if(error)throw error;if((!rows||!rows.length)&&wines.length){if(!confirm(`Nel cloud non ci sono ancora bottiglie. Vuoi caricare le ${wines.length} schede presenti su questo dispositivo?`)){status('Dati locali conservati su questo dispositivo.');return}for(const localWine of wines){await saveWine(localWine)}const refreshed=await supabase.from('wines').select('*').order('created_at',{ascending:false});if(refreshed.error)throw refreshed.error;rows=refreshed.data}let ids=(rows||[]).map(r=>r.id),tastings=[];if(ids.length){let q=await supabase.from('tastings').select('*').in('wine_id',ids);if(q.error)throw q.error;tastings=q.data||[]}wines=await Promise.all((rows||[]).map(async r=>{let w=rowFromDb(r);w.tastings=tastings.filter(t=>t.wine_id===r.id).map(t=>({id:t.id,date:t.tasting_date,score:t.score,appearance:t.appearance,aromas:t.aromas,palate:t.palate,evolution:t.evolution,pairing:t.pairing,notes:t.notes}));if(w.photoPath){let p=await supabase.storage.from('wine-labels').createSignedUrl(w.photoPath,3600);if(!p.error)w.photo=p.data.signedUrl}return w}));localStorage.setItem(KEY,JSON.stringify(wines));render();status('Cantina sincronizzata.')}catch(e){status('Errore cloud: '+e.message)}finally{cloudBusy=false}}
+
 async function auth(mode){let f=new FormData($('#accountForm')),email=f.get('email'),password=f.get('password');if(!supabase){status('Configurazione Supabase mancante');return}let r=mode==='signup'?await supabase.auth.signUp({email,password}):await supabase.auth.signInWithPassword({email,password});if(r.error){status(r.error.message);return}if(mode==='signup'&&!r.data.session){status('Account creato: conferma l’indirizzo email, poi accedi.');return}currentUser=r.data.user;await syncFromCloud();$('#accountDialog').close()}
+
 function dbWine(w){return{user_id:currentUser.id,wine_name:w.name,producer:w.producer||null,vintage:w.vintage?Number(w.vintage):null,appellation:w.appellation||null,region:w.region||null,grapes:w.grapes||null,quantity:Number(w.quantity)||1,purchase_price:Number(w.price)||0,purchase_date:w.purchaseDate||null,storage_location:w.location||null,notes:w.notes||null,label_image_path:w.photoPath||null,market_value:Number(w.marketValue)||null,market_source:w.marketSource||null,market_date:w.marketDate||null,drink_from:w.drinkFrom?Number(w.drinkFrom):null,drink_until:w.drinkUntil?Number(w.drinkUntil):null,service_temp:w.serviceTemp||null,decanting:w.decanting||null}}
+
 async function uploadPhoto(file,id){if(!file||!currentUser)return null;if(file.size>5*1024*1024)throw Error('La foto deve pesare meno di 5 MB.');let ext=(file.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'');let path=`${currentUser.id}/${id}.${ext}`;let {error}=await supabase.storage.from('wine-labels').upload(path,file,{upsert:true,contentType:file.type||'image/jpeg'});if(error)throw error;return path}
+
 async function saveWine(w){if(!currentUser)return true;let r;if(w.cloudId){r=await supabase.from('wines').update(dbWine(w)).eq('id',w.id).select().single()}else{r=await supabase.from('wines').insert(dbWine(w)).select().single()}if(r.error)throw r.error;w.id=r.data.id;w.cloudId=true;return true}
+
 async function openDetail(id){selected=wines.find(w=>w.id===id);if(!selected)return;let w=selected;$('#detailContent').innerHTML=`<div class="modal-head"><div><div class="eyebrow">SCHEDA DELLA BOTTIGLIA</div><h2>${esc(w.name)}</h2></div><button class="close" data-close>×</button></div><div class="detail-hero">${w.photo?`<img src="${w.photo}" alt="Etichetta">`:'<div class="wine-placeholder">♜</div>'}<div><h2>${esc(w.name)}</h2><p class="muted">${esc([w.producer,w.vintage,w.appellation].filter(Boolean).join(' · '))}</p></div></div><div class="detail-grid">${[['REGIONE',w.region],['VITIGNI',w.grapes],['QUANTITÀ',w.quantity],['ACQUISTO',eur(w.price)],['VALORE STIMATO',w.marketValue?eur(w.marketValue):'Non disponibile'],['FINESTRA DI BEVA',w.drinkFrom||w.drinkUntil?`${w.drinkFrom||'—'} – ${w.drinkUntil||'—'}`:'Da definire'],['TEMPERATURA',w.serviceTemp],['DECANTAZIONE',w.decanting],['POSIZIONE',w.location]].map(([a,b])=>`<div><span>${a}</span><b>${esc(b||'—')}</b></div>`).join('')}</div><p class="detail-notes">${esc(w.notes||'Nessuna nota ancora.')}</p><div class="detail-actions"><button class="gold-btn" id="tastingBtn">＋ Degustazione</button><button class="outline-btn" id="editBtn">Modifica scheda</button><button class="outline-btn" id="deleteBtn">Elimina</button></div>`;$('#detailDialog').showModal();$('#tastingBtn').onclick=()=>addTasting(w.id);$('#editBtn').onclick=()=>{ $('#detailDialog').close();fillWineForm(w);$('#wineDialog').showModal()};$('#deleteBtn').onclick=async()=>{if(!confirm('Eliminare definitivamente questa bottiglia?'))return;try{if(currentUser&&w.cloudId){let r=await supabase.from('wines').delete().eq('id',w.id);if(r.error)throw r.error}wines=wines.filter(x=>x.id!==w.id);persist();$('#detailDialog').close()}catch(e){alert('Eliminazione non riuscita: '+e.message)}}}
+
 async function addTasting(id){let w=wines.find(x=>x.id===id);$('#tastingForm').reset();$('#tastingForm').elements.date.value=today();$('#tastingDialog').dataset.wineId=id;$('#tastingDialog').showModal()}
+
 $('#tastingForm').addEventListener('submit',async ev=>{ev.preventDefault();let f=new FormData(ev.target),id=$('#tastingDialog').dataset.wineId,w=wines.find(x=>x.id===id),t={date:f.get('date'),score:Number(f.get('score')),appearance:f.get('appearance'),aromas:f.get('aromas'),palate:f.get('palate'),evolution:f.get('evolution'),pairing:f.get('pairing'),notes:f.get('notes')};try{if(currentUser){let r=await supabase.from('tastings').insert({user_id:currentUser.id,wine_id:w.id,tasting_date:t.date,score:t.score,appearance:t.appearance,aromas:t.aromas,palate:t.palate,evolution:t.evolution,pairing:t.pairing,notes:t.notes});if(r.error)throw r.error}w.tastings=[...(w.tastings||[]),t];persist();$('#tastingDialog').close();$('#detailDialog').close()}catch(e){alert('Degustazione non salvata: '+e.message)}});
+
 function fillWineForm(w){let form=$('#wineForm');form.reset();for(let k of ['name','producer','vintage','appellation','region','grapes','quantity','price','purchaseDate','location','notes','marketValue','marketSource','marketDate','drinkFrom','drinkUntil','serviceTemp','decanting'])form.elements[k].value=w?.[k]??(k==='quantity'?1:'');form.dataset.editId=w?.id||'';$('#wineFormTitle').textContent=w?'Modifica bottiglia':'Aggiungi un vino'}
+
 $('#addBtn').onclick=$('#emptyAdd').onclick=()=>{if(total()>=150){alert('Hai raggiunto il limite di 150 bottiglie.');return}fillWineForm(null);$('#wineDialog').showModal()};
+
 $('#wineForm').addEventListener('submit',async ev=>{ev.preventDefault();let f=new FormData(ev.target),id=ev.target.dataset.editId,w=id?wines.find(x=>x.id===id):{id:crypto.randomUUID(),tastings:[],photo:''};let oldQty=Number(w.quantity)||0;for(let k of ['name','producer','vintage','appellation','region','grapes','quantity','price','purchaseDate','location','notes','marketValue','marketSource','marketDate','drinkFrom','drinkUntil','serviceTemp','decanting'])w[k]=f.get(k);w.quantity=Math.max(1,Number(w.quantity)||1);w.price=Number(w.price)||0;w.marketValue=Number(w.marketValue)||0;if(total()-oldQty+w.quantity>150){alert('Il totale non può superare 150 bottiglie.');return}let file=f.get('photo');try{if(file&&file.size){if(currentUser)w.photoPath=await uploadPhoto(file,w.id);else w.photo=await new Promise((resolve,reject)=>{let r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(file)})}if(currentUser){await saveWine(w);if(w.photoPath){let p=await supabase.storage.from('wine-labels').createSignedUrl(w.photoPath,3600);if(!p.error)w.photo=p.data.signedUrl}}if(!id)wines.push(w);persist();$('#wineDialog').close()}catch(e){alert('Salvataggio non riuscito: '+e.message)}});
+
 $('#sort').onchange=render;document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===b));['cellar','journal','guide'].forEach(id=>$('#'+id).classList.toggle('hidden',id!==b.dataset.tab))});$('#wineList').onclick=e=>{let c=e.target.closest('[data-id]');if(c)openDetail(c.dataset.id)};$('#accountBtn').onclick=()=>$('#accountDialog').showModal();$('#accountForm').addEventListener('submit',e=>{e.preventDefault();auth('signin')});$('#signUpBtn').onclick=()=>auth('signup');$('#signOutBtn').onclick=async()=>{if(supabase)await supabase.auth.signOut();currentUser=null;wines=load();render();status('Disconnessione effettuata.')};document.addEventListener('click',e=>{if(e.target.matches('[data-close]'))e.target.closest('dialog').close()});
+
 $('#exportBtn').onclick=()=>{let blob=new Blob([JSON.stringify({app:'SOMMELIER',version:3,exportedAt:new Date().toISOString(),wines},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`sommelier-backup-${today()}.json`;a.click();URL.revokeObjectURL(a.href)};$('#importInput').onchange=async e=>{let file=e.target.files[0];if(!file)return;try{let data=JSON.parse(await file.text()),arr=Array.isArray(data)?data:data.wines;if(!Array.isArray(arr))throw Error('File non valido');if(!confirm(`Importare ${arr.length} schede? Le aggiungerò alla cantina attuale.`))return;let normalized=arr.map(w=>({...w,id:crypto.randomUUID(),tastings:w.tastings||[]}));if(total()+normalized.reduce((n,w)=>n+Number(w.quantity||1),0)>150)throw Error('Il limite massimo è 150 bottiglie');if(currentUser){for(let w of normalized)await saveWine(w)}wines.push(...normalized);persist();alert('Importazione completata.')}catch(err){alert('Importazione non riuscita: '+err.message)}e.target.value=''};
+
 $('#recognizeBtn').onclick=async()=>{let file=$('#recognizePhoto').files[0];if(!file){alert('Seleziona prima una foto dell’etichetta.');return}if(!currentUser){alert('Accedi al cloud per usare il riconoscimento AI.');return}let btn=$('#recognizeBtn');btn.disabled=true;btn.textContent='Analisi in corso…';try{let {data,error}=await supabase.functions.invoke('recognize-label',{body:{image:await new Promise((resolve,reject)=>{let r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(file)})}});if(error)throw error;let d=data?.wine||data;if(!d?.name)throw Error('Nessun dato leggibile.');fillWineForm({...d,quantity:1});for(let k of ['name','producer','vintage','appellation','region','grapes','notes'])if(d[k])$('#wineForm').elements[k].value=d[k];$('#wineDialog').showModal()}catch(e){alert('Riconoscimento non disponibile: '+e.message)}finally{btn.disabled=false;btn.textContent='Riconosci etichetta con AI'}};
+
 if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));render();initCloud();
